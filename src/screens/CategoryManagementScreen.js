@@ -12,9 +12,8 @@ import { useIsFocused } from '@react-navigation/native';
 import {
   getCategoryList,
   saveCategory,
-  updateCategory,
   deleteCategory,
-} from '../storage/storage'; // Doğru dosya yolunu varsayar
+} from '../storage/storage';
 
 const CategoryManagementScreen = () => {
   const [categories, setCategories] = useState([]);
@@ -38,25 +37,6 @@ const CategoryManagementScreen = () => {
     await saveCategory({ name: newCategoryName.trim() });
     setNewCategoryName('');
     loadCategories();
-  };
-
-  const handleEdit = (item) => {
-    Alert.prompt(
-      'Kategori Adı Düzenle',
-      `"${item.name}" için yeni adı girin:`,
-      async (value) => {
-        if (!value || value.trim() === '') return;
-        
-        const success = await updateCategory(item.id, value.trim());
-        if (success) {
-            loadCategories();
-        } else {
-            Alert.alert('Hata', 'Kategori güncellenirken bir sorun oluştu.');
-        }
-      },
-      'plain-text',
-      item.name
-    );
   };
 
   const handleDelete = (id) => {
@@ -86,10 +66,6 @@ const CategoryManagementScreen = () => {
       <Text style={styles.cardText}>{item.name}</Text>
 
       <View style={styles.row}>
-        <TouchableOpacity style={styles.editBtn} onPress={() => handleEdit(item)}>
-          <Text style={styles.btnText}>Düzenle</Text>
-        </TouchableOpacity>
-
         <TouchableOpacity style={styles.deleteBtn} onPress={() => handleDelete(item.id)}>
           <Text style={styles.btnText}>Sil</Text>
         </TouchableOpacity>
@@ -118,9 +94,10 @@ const CategoryManagementScreen = () => {
         data={categories}
         keyExtractor={(item) => item.id}
         renderItem={renderItem}
-        style={styles.list}
+        style={[styles.list, { paddingBottom: 80 }]} 
       />
     </View>
+    
   );
 };
 
@@ -162,16 +139,11 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+    zIndex: 10, 
   },
   cardText: { fontSize: 16, fontWeight: '500' },
   row: {
     flexDirection: 'row',
-  },
-  editBtn: {
-    backgroundColor: '#2b6cb0',
-    padding: 8,
-    borderRadius: 6,
-    marginRight: 10,
   },
   deleteBtn: {
     backgroundColor: '#c53030',

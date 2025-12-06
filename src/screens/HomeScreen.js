@@ -6,44 +6,86 @@ import {
   TouchableOpacity,
   AppState,
   Alert,
+  TextInput,
+  TouchableWithoutFeedback,
+  Keyboard,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Picker } from '@react-native-picker/picker';
 import { useIsFocused, useNavigation } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
-import { saveSession, getCategoryList } from '../storage/storage'; 
+import { saveSession, getCategoryList } from '../storage/storage';
+import ModalSelector from 'react-native-modal-selector';
 
-const DEFAULT_SECONDS = 25 * 60; 
+const STORAGE_KEYS = {
+  POMODORO_DURATION: '@pomodoroDuration',
+};
+
+const DEFAULT_MINUTES = 25;
+const DEFAULT_SECONDS = DEFAULT_MINUTES * 60;
 
 const HomeScreen = () => {
   const navigation = useNavigation();
+  const [sessionDurationSec, setSessionDurationSec] = useState(DEFAULT_SECONDS);
   const [secondsLeft, setSecondsLeft] = useState(DEFAULT_SECONDS);
   const [isRunning, setIsRunning] = useState(false);
+
   const [selectedCategory, setSelectedCategory] = useState('');
+  const [selectedCategoryName, setSelectedCategoryName] = useState('');
+
+  const [durationInput, setDurationInput] = useState(String(DEFAULT_MINUTES));
+
   const [distractionCount, setDistractionCount] = useState(0);
-  const [categories, setCategories] = useState([]); 
+  const [categories, setCategories] = useState([]);
   const intervalRef = useRef(null);
   const appState = useRef(AppState.currentState);
   const startedAtRef = useRef(null);
-  
-  const isFocused = useIsFocused(); 
+
+  const isFocused = useIsFocused();
+
+  const loadDuration = async () => {
+    try {
+      const storedDurationMin = await AsyncStorage.getItem(
+        STORAGE_KEYS.POMODORO_DURATION,
+      );
+      const durationMin = storedDurationMin
+        ? parseInt(storedDurationMin, 10)
+        : DEFAULT_MINUTES;
+
+      setDurationInput(String(durationMin));
+      setSessionDurationSec(durationMin * 60);
+      setSecondsLeft(durationMin * 60);
+    } catch (e) {
+      console.error('Süre yüklenirken hata:', e);
+      setDurationInput(String(DEFAULT_MINUTES));
+      setSessionDurationSec(DEFAULT_SECONDS);
+      setSecondsLeft(DEFAULT_SECONDS);
+    }
+  };
+
+  const saveDuration = async minutes => {
+    try {
+      await AsyncStorage.setItem(
+        STORAGE_KEYS.POMODORO_DURATION,
+        String(minutes),
+      );
+    } catch (e) {
+      console.error('Süre kaydedilirken hata:', e);
+    }
+  };
 
   const loadCategories = async () => {
     const data = await getCategoryList();
     setCategories(data);
-    if (!selectedCategory) {
-        setSelectedCategory(''); 
-    }
-  };
-  
-  const goToCategoryManagement = () => {
-      navigation.navigate('KategoriYonetimi'); 
   };
 
+  const goToCategoryManagement = () => {
+    navigation.navigate('KategoriYonetimi');
+  };
 
   useEffect(() => {
     if (isFocused) {
-        loadCategories();
+      loadCategories();
+      loadDuration();
     }
   }, [isFocused]);
 
@@ -76,9 +118,11 @@ const HomeScreen = () => {
     };
   }, [isRunning]);
 
- 
   useEffect(() => {
-    const subscription = AppState.addEventListener('change', handleAppStateChange);
+    const subscription = AppState.addEventListener(
+      'change',
+      handleAppStateChange,
+    );
     return () => subscription.remove();
   }, [isRunning]);
 
@@ -88,10 +132,16 @@ const HomeScreen = () => {
       return;
     }
 
-    if (appState.current === 'active' && (nextAppState === 'background' || nextAppState === 'inactive')) {
+    if (
+      appState.current === 'active' &&
+      (nextAppState === 'background' || nextAppState === 'inactive')
+    ) {
       setDistractionCount(c => c + 1);
       pauseTimer();
-      Alert.alert('Dikkat dağıldı', 'Uygulamadan çıktığınız için sayaç duraklatıldı.');
+      Alert.alert(
+        'Dikkat dağıldı',
+        'Uygulamadan çıktığınız için sayaç duraklatıldı.',
+      );
     }
 
     appState.current = nextAppState;
@@ -99,10 +149,26 @@ const HomeScreen = () => {
 
   const startTimer = () => {
     if (isRunning) return;
-    if (!selectedCategory) {
-        Alert.alert("Hata", "Lütfen bir kategori seçiniz.");
-        return;
+
+    Keyboard.dismiss();
+
+    const minutes = parseInt(durationInput, 10);
+
+    if (isNaN(minutes) || minutes <= 0) {
+      Alert.alert('Hata', 'Lütfen geçerli bir süre (dakika) giriniz.');
+      return;
     }
+
+    if (!selectedCategory) {
+      Alert.alert('Hata', 'Lütfen bir kategori seçiniz.');
+      return;
+    }
+
+    const newDurationSec = minutes * 60;
+    setSessionDurationSec(newDurationSec);
+    setSecondsLeft(newDurationSec);
+    saveDuration(minutes);
+
     setIsRunning(true);
   };
 
@@ -112,23 +178,26 @@ const HomeScreen = () => {
 
   const resetTimer = () => {
     setIsRunning(false);
-    setSecondsLeft(DEFAULT_SECONDS);
+    setSecondsLeft(sessionDurationSec);
     setDistractionCount(0);
     startedAtRef.current = null;
+    
+    Keyboard.dismiss();
   };
 
   const endSession = async (completed = false) => {
     setIsRunning(false);
+    
+    Keyboard.dismiss();
+
     const startedAt = startedAtRef.current || Date.now();
     const elapsedMs = Date.now() - startedAt;
     const elapsedSec = Math.round(elapsedMs / 1000);
-    const durationSec = completed ? DEFAULT_SECONDS : elapsedSec;
-    const totalMinutes = Math.floor(durationSec / 60);
-    const totalSeconds = durationSec % 60;
+    const durationSec = completed ? sessionDurationSec : elapsedSec;
+    
+    const formattedDuration = formatDurationDetail(durationSec);
 
-    const categoryName = selectedCategory 
-        ? selectedCategory 
-        : 'Belirtilmedi'; 
+    const categoryName = selectedCategoryName || 'Belirtilmedi';
 
     const session = {
       id: `${Date.now()}`,
@@ -141,7 +210,7 @@ const HomeScreen = () => {
 
     Alert.alert(
       'Seans Özeti',
-      `Kategori: ${session.category}\nSüre: ${totalMinutes} dakika ${totalSeconds} saniye\nDikkat Dağılımı: ${session.distractions}`,
+      `Kategori: ${session.category}\nSüre: ${formattedDuration}\nDikkat Dağılımı: ${session.distractions}`,
       [
         {
           text: 'Kaydet',
@@ -158,144 +227,277 @@ const HomeScreen = () => {
           style: 'cancel',
         },
       ],
-      { cancelable: false }
+      { cancelable: false },
     );
   };
 
   const formatTime = secs => {
-    const m = Math.floor(secs / 60)
-      .toString()
-      .padStart(2, '0');
-    const s = (secs % 60).toString().padStart(2, '0');
+    const totalSeconds = Math.max(0, secs); 
+    const hours = Math.floor(totalSeconds / 3600);
+    const minutes = Math.floor((totalSeconds % 3600) / 60);
+    const seconds = totalSeconds % 60;
+
+    const h = hours.toString().padStart(2, '0');
+    const m = minutes.toString().padStart(2, '0');
+    const s = seconds.toString().padStart(2, '0');
+
+    if (hours > 0) {
+      return `${h}:${m}:${s}`;
+    }
     return `${m}:${s}`;
   };
 
+  const formatDurationDetail = (secs) => {
+    const totalSeconds = Math.max(0, secs);
+    const hours = Math.floor(totalSeconds / 3600);
+    const minutes = Math.floor((totalSeconds % 3600) / 60);
+    const seconds = totalSeconds % 60;
+
+    let parts = [];
+    if (hours > 0) {
+      parts.push(`${hours} saat`);
+    }
+    if (minutes > 0 || (hours === 0 && seconds === 0)) {
+      parts.push(`${minutes} dakika`);
+    }
+    if (seconds > 0) {
+      parts.push(`${seconds} saniye`);
+    }
+
+    if (parts.length === 0) return '0 saniye';
+    return parts.join(' ');
+  }
+
+  const handleDurationChange = text => {
+    const newText = text.replace(/[^0-9]/g, '');
+    setDurationInput(newText);
+
+    const minutes = parseInt(newText, 10);
+    if (!isRunning) {
+        if (!isNaN(minutes) && minutes > 0) {
+            const newDurationSec = minutes * 60;
+            setSessionDurationSec(newDurationSec);
+            setSecondsLeft(newDurationSec);
+        } else if (newText === '') {
+            setSessionDurationSec(0);
+            setSecondsLeft(0);
+        }
+    }
+  };
+  
+  const formattedTime = formatTime(secondsLeft);
+  const isLongFormat = formattedTime.length > 5;
+
   return (
-    <View style={styles.container}>
+    <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
+      <View style={styles.container}>
+        <Text style={styles.title}>Ana Sayfa (Zamanlayıcı)</Text>
 
-      <Text style={styles.title}>Ana Sayfa (Zamanlayıcı)</Text>
-
-      <View style={styles.timerBox}>
-        <Text style={styles.timerText}>{formatTime(secondsLeft)}</Text>
-      </View>
-
-      <View style={styles.row}>
-        <TouchableOpacity
-          style={[styles.button, (isRunning || !selectedCategory) ? styles.buttonDisabled : null]}
-          onPress={startTimer}
-          disabled={isRunning || !selectedCategory}
-        >
-          <Text style={styles.buttonText}>Başlat</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={[styles.button, !isRunning ? styles.buttonDisabled : null]}
-          onPress={pauseTimer}
-          disabled={!isRunning}
-        >
-          <Text style={styles.buttonText}>Duraklat</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity style={styles.button} onPress={resetTimer}>
-          <Text style={styles.buttonText}>Sıfırla</Text>
-        </TouchableOpacity>
-      </View>
-
-      <View style={styles.pickerRow}>
-        <Text style={styles.label}>Kategori:</Text>
-        <View style={styles.pickerContainer}>
-          <Picker
-            selectedValue={selectedCategory}
-            onValueChange={(itemValue) => setSelectedCategory(itemValue)}
-            mode="dropdown"
-          > 
-            {/* Varsayılan Seçenek */}
-            <Picker.Item 
-                label="Lütfen Kategori Seçiniz" 
-                value="" 
-                enabled={false} 
-                style={{ color: 'gray' }} 
-            />
-            {/* Dinamik Kategoriler Listesi */}
-            {categories.map((c) => (
-                <Picker.Item key={c.id} label={c.name} value={c.name} />
-            ))}
-          </Picker>
+        <View style={styles.inputContainer}>
+          <Text style={styles.inputLabel}>Pomodoro Süresi (Dakika):</Text>
+          <TextInput
+            style={isRunning ? styles.textInputDisabled : styles.textInput}
+            onChangeText={handleDurationChange}
+            value={durationInput}
+            keyboardType="numeric"
+            maxLength={3}
+            editable={!isRunning}
+            placeholder="Dakika giriniz (örn: 25)"
+            placeholderTextColor="#999"
+          />
         </View>
-      </View>
-      
-      {/* Kategori Seçici'nin hemen altında bulunan yeni buton */}
-      <TouchableOpacity 
-        style={styles.editCategoryButton}
-        onPress={goToCategoryManagement}
-      >
-        <Text style={styles.editCategoryButtonText}>Kategorileri Düzenle 📝</Text>
-      </TouchableOpacity>
 
-      <View style={styles.summary}>
-        <Text>Geçerli Dikkat Dağılımı Sayısı: {distractionCount}</Text>
-      </View>
+        <View style={styles.timerBox}>
+          <Text 
+            style={[
+                styles.timerTextDefault, 
+                isLongFormat && styles.timerTextSmall 
+            ]}
+          >
+            {formattedTime}
+          </Text>
+        </View>
 
-      <View style={{ height: 40 }} />
-      <Text style={{ fontSize: 12, color: 'gray' }}>
-        (Uygulamadan çıktığınızda sayaç otomatik duraklar ve bir dikkat dağılımı
-        sayılır.)
-      </Text>
-    </View>
+        <View style={styles.row}>
+          <TouchableOpacity
+            style={[
+              styles.button,
+              isRunning || !selectedCategory || sessionDurationSec === 0
+                ? styles.buttonDisabled
+                : null,
+            ]}
+            onPress={startTimer}
+            disabled={isRunning || !selectedCategory || sessionDurationSec === 0}
+          >
+            <Text style={styles.buttonText}>Başlat</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.button, !isRunning ? styles.buttonDisabled : null]}
+            onPress={pauseTimer}
+            disabled={!isRunning}
+          >
+            <Text style={styles.buttonText}>Duraklat</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity style={styles.button} onPress={resetTimer}>
+            <Text style={styles.buttonText}>Sıfırla</Text>
+          </TouchableOpacity>
+        </View>
+
+        <View style={{ width: '90%', marginTop: 20 }}>
+          <ModalSelector
+            data={categories.map((c, index) => ({
+              key: index,
+              label: c.name,
+              value: c.id,
+            }))}
+            initValue="Lütfen Kategori Seçiniz"
+            onChange={option => {
+              setSelectedCategory(option.value);
+              setSelectedCategoryName(option.label);
+            }}
+            disabled={isRunning}
+          >
+            <Text
+              style={
+                isRunning ? styles.selectorTextDisabled : styles.selectorText
+              }
+            >
+              Kategori: {selectedCategoryName || 'Lütfen Kategori Seçiniz'}
+            </Text>
+          </ModalSelector>
+        </View>
+
+        <TouchableOpacity
+          style={styles.editCategoryButton}
+          onPress={goToCategoryManagement}
+        >
+          <Text style={styles.editCategoryButtonText}>
+            Kategorileri Düzenle 
+          </Text>
+        </TouchableOpacity>
+
+        <View style={styles.summary}>
+          <Text>Geçerli Dikkat Dağılımı Sayısı: {distractionCount}</Text>
+        </View>
+
+        <View style={{ height: 40 }} />
+        <Text style={{ fontSize: 12, color: 'gray' }}>
+          (Uygulamadan çıktığınızda sayaç otomatik duraklar ve bir dikkat
+          dağılımı sayılır.)
+        </Text>
+      </View>
+    </TouchableWithoutFeedback>
   );
 };
 
 const styles = StyleSheet.create({
-  container: { flex: 1, padding: 20, alignItems: 'center', backgroundColor: '#f7f7f7' },
-  settingsButton: { 
-    position: 'absolute', 
-    top: 20, 
-    right: 20, 
-    padding: 10, 
-    zIndex: 10, 
+  container: {
+    flex: 1,
+    padding: 20,
+    alignItems: 'center',
+    backgroundColor: '#f7f7f7',
+    paddingTop: 50,
   },
-  title: { fontSize: 18, fontWeight: '700', marginVertical: 8 },
+  title: {
+    fontSize: 18,
+    fontWeight: '700',
+    marginBottom: 8,
+  },
   timerBox: {
     marginTop: 20,
     marginBottom: 12,
     padding: 24,
-    borderRadius: 12,
+    width: 200,
+    height: 200,
+    borderRadius: 100,
     backgroundColor: 'white',
-    elevation: 2,
+    elevation: 4,
     alignItems: 'center',
     justifyContent: 'center',
-    minWidth: 180,
   },
-  timerText: { fontSize: 40, fontWeight: '700' },
+  timerTextDefault: { 
+    fontSize: 48, 
+    fontWeight: '700',
+  },
+  timerTextSmall: {
+    fontSize: 36,
+    fontWeight: '700',
+  },
   row: { flexDirection: 'row', marginTop: 18, alignItems: 'center' },
   button: {
     marginHorizontal: 8,
-    backgroundColor: '#38A169',
+    backgroundColor: '#1EAD5D',
     paddingHorizontal: 14,
     paddingVertical: 10,
     borderRadius: 8,
   },
-  buttonDisabled: { opacity: 0.5 },
+  buttonDisabled: {
+    backgroundColor: '#95CBA8',
+  },
   buttonText: { color: 'white', fontWeight: '600' },
-  
-  pickerRow: { 
-    marginTop: 20, 
-    width: '90%', 
-    maxWidth: 350,
+
+  inputContainer: {
+    width: '90%',
+    marginTop: 10,
+    alignItems: 'center',
   },
-  label: { marginBottom: 6 },
-  pickerContainer: { 
-    backgroundColor: 'white', 
-    borderRadius: 8, 
-    overflow: 'hidden', 
-    width: '100%', 
-    borderWidth: 2,           
-    borderColor: '#000'
+  inputLabel: {
+    marginBottom: 5,
+    fontSize: 14,
+    fontWeight: '500',
+    color: '#333',
   },
-  
+  textInput: {
+    width: '100%',
+    padding: 14,
+    backgroundColor: 'white',
+    borderRadius: 8,
+    elevation: 2,
+    textAlign: 'center',
+    fontSize: 16,
+    fontWeight: '500',
+    borderColor: '#ccc',
+    borderWidth: 1,
+  },
+  textInputDisabled: {
+    width: '100%',
+    padding: 14,
+    backgroundColor: '#e0e0e0',
+    borderRadius: 8,
+    elevation: 2,
+    textAlign: 'center',
+    fontSize: 16,
+    fontWeight: '500',
+    color: '#888',
+    borderColor: '#ccc',
+    borderWidth: 1,
+  },
+
+  selectorText: {
+    padding: 14,
+    backgroundColor: 'white',
+    borderRadius: 8,
+    elevation: 2,
+    textAlign: 'center',
+    fontSize: 16,
+    fontWeight: '500',
+  },
+  selectorTextDisabled: {
+    padding: 14,
+    backgroundColor: '#e0e0e0',
+    borderRadius: 8,
+    elevation: 2,
+    textAlign: 'center',
+    fontSize: 16,
+    fontWeight: '500',
+    color: '#888',
+  },
+
   editCategoryButton: {
     marginTop: 15,
-    backgroundColor: '#6c757d', 
+    backgroundColor: '#6c757d',
     paddingHorizontal: 12,
     paddingVertical: 8,
     borderRadius: 8,
@@ -305,7 +507,6 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     fontSize: 14,
   },
-  
   summary: { marginTop: 18, alignItems: 'center' },
 });
 

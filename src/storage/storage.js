@@ -3,7 +3,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 const SESSIONS_KEY = 'focus_sessions_v1';
 const CATEGORIES_KEY = 'focus_categories_v1';
 
-
+// --- Oturum (Session) Fonksiyonları ---
 export const saveSession = async (session) => {
   try {
     const raw = await AsyncStorage.getItem(SESSIONS_KEY);
@@ -60,13 +60,11 @@ export const updateSession = async (updated) => {
 };
 
 // --- Kategori Fonksiyonları ---
-
 export const getCategoryList = async () => {
   try {
     const raw = await AsyncStorage.getItem(CATEGORIES_KEY);
     
-    // Eğer kategori yoksa, varsayılan bir listeyi oluşturup döndür
-    if (!raw) {
+    if (raw === null) {
       const defaultCategories = [
         { id: '1', name: 'Ders Çalışma' },
         { id: '2', name: 'Kodlama' },
@@ -77,6 +75,7 @@ export const getCategoryList = async () => {
       await AsyncStorage.setItem(CATEGORIES_KEY, JSON.stringify(defaultCategories));
       return defaultCategories;
     }
+    
     return JSON.parse(raw);
   } catch (e) {
     console.error('getCategoryList error', e);
@@ -96,21 +95,6 @@ export const saveCategory = async (category) => {
     return true;
   } catch (e) {
     console.error('saveCategory error', e);
-    return false;
-  }
-};
-
-export const updateCategory = async (id, newName) => {
-  try {
-    const arr = await getCategoryList();
-    const newArr = arr.map(item =>
-      item.id === id ? { ...item, name: newName } : item
-    );
-
-    await AsyncStorage.setItem(CATEGORIES_KEY, JSON.stringify(newArr));
-    return true;
-  } catch (e) {
-    console.error('updateCategory error', e);
     return false;
   }
 };
