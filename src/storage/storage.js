@@ -113,3 +113,13 @@ export const deleteCategory = async (id) => {
     return false;
   }
 };
+
+export const deleteAllSessions = async () => {
+  try {
+    await AsyncStorage.removeItem(SESSIONS_KEY);
+    return true;
+  } catch (e) {
+    console.error('deleteAllSessions error', e);
+    return false;
+  }
+};

@@ -34,11 +34,12 @@ const HomeScreen = () => {
 
   const [durationInput, setDurationInput] = useState(String(DEFAULT_MINUTES));
 
-  const [distractionCount, setDistractionCount] = useState(0);
+  const [distractionCount, setDistractionCount] = useState(0); 
   const [categories, setCategories] = useState([]);
   const intervalRef = useRef(null);
   const appState = useRef(AppState.currentState);
-  const startedAtRef = useRef(null);
+
+  const startedAtRef = useRef(null); 
 
   const isFocused = useIsFocused();
 
@@ -97,7 +98,7 @@ const HomeScreen = () => {
         setSecondsLeft(prev => {
           if (prev <= 1) {
             clearInterval(intervalRef.current);
-            endSession(true);
+            endSession(true); 
             return 0;
           }
           return prev - 1;
@@ -136,11 +137,14 @@ const HomeScreen = () => {
       appState.current === 'active' &&
       (nextAppState === 'background' || nextAppState === 'inactive')
     ) {
-      setDistractionCount(c => c + 1);
-      pauseTimer();
+      setIsRunning(false); 
+      
+      setDistractionCount(c => c + 1); 
+      
       Alert.alert(
-        'Dikkat dağıldı',
-        'Uygulamadan çıktığınız için sayaç duraklatıldı.',
+        'Dikkat Dağılımı! Oturum Duraklatıldı',
+        `Uygulamadan çıktığınız için sayaç duraklatıldı.\n\nKaldığınız yerden devam etmek için tekrar Başlat'a basın.`,
+        [{ text: 'Tamam', onPress: () => { } }]
       );
     }
 
@@ -164,70 +168,60 @@ const HomeScreen = () => {
       return;
     }
 
-    const newDurationSec = minutes * 60;
-    setSessionDurationSec(newDurationSec);
-    setSecondsLeft(newDurationSec);
-    saveDuration(minutes);
-
+    if (secondsLeft === sessionDurationSec) {
+        const newDurationSec = minutes * 60;
+        setSessionDurationSec(newDurationSec);
+        setSecondsLeft(newDurationSec);
+        saveDuration(minutes);
+    }
+    
     setIsRunning(true);
   };
 
   const pauseTimer = () => {
+    if (!isRunning) return;
     setIsRunning(false);
+    endSession(false);
   };
 
   const resetTimer = () => {
     setIsRunning(false);
     setSecondsLeft(sessionDurationSec);
-    setDistractionCount(0);
-    startedAtRef.current = null;
+    setDistractionCount(0); 
+    startedAtRef.current = null; 
     
     Keyboard.dismiss();
   };
 
+  
   const endSession = async (completed = false) => {
     setIsRunning(false);
-    
     Keyboard.dismiss();
-
-    const startedAt = startedAtRef.current || Date.now();
-    const elapsedMs = Date.now() - startedAt;
-    const elapsedSec = Math.round(elapsedMs / 1000);
-    const durationSec = completed ? sessionDurationSec : elapsedSec;
     
-    const formattedDuration = formatDurationDetail(durationSec);
+    const focusedDurationSec = sessionDurationSec - secondsLeft;
+    
+    const durationSec = completed ? sessionDurationSec : focusedDurationSec;
+    
+    const safeDurationSec = Math.max(0, durationSec);
 
+    const formattedDuration = formatDurationDetail(safeDurationSec);
     const categoryName = selectedCategoryName || 'Belirtilmedi';
 
     const session = {
       id: `${Date.now()}`,
       category: categoryName,
-      durationSec: durationSec,
-      distractions: distractionCount,
+      durationSec: safeDurationSec,
+      distractions: distractionCount, 
       date: new Date().toISOString(),
       completed: completed,
     };
 
+    await saveSession(session);
+
     Alert.alert(
       'Seans Özeti',
-      `Kategori: ${session.category}\nSüre: ${formattedDuration}\nDikkat Dağılımı: ${session.distractions}`,
-      [
-        {
-          text: 'Kaydet',
-          onPress: async () => {
-            await saveSession(session);
-            resetTimer();
-          },
-        },
-        {
-          text: 'İptal (kaydetme)',
-          onPress: () => {
-            resetTimer();
-          },
-          style: 'cancel',
-        },
-      ],
-      { cancelable: false },
+      `Kategori: ${session.category}\nSüre: ${formattedDuration}\nDikkat Dağılımı: ${session.distractions}\n\nSeans otomatik olarak kaydedilmiştir.`,
+      [{ text: 'Tamam', onPress: resetTimer }] 
     );
   };
 
@@ -322,12 +316,12 @@ const HomeScreen = () => {
           <TouchableOpacity
             style={[
               styles.button,
-              isRunning || !selectedCategory || sessionDurationSec === 0
+              !selectedCategory || sessionDurationSec === 0 || isRunning
                 ? styles.buttonDisabled
                 : null,
             ]}
             onPress={startTimer}
-            disabled={isRunning || !selectedCategory || sessionDurationSec === 0}
+            disabled={!selectedCategory || sessionDurationSec === 0 || isRunning}
           >
             <Text style={styles.buttonText}>Başlat</Text>
           </TouchableOpacity>
@@ -337,7 +331,7 @@ const HomeScreen = () => {
             onPress={pauseTimer}
             disabled={!isRunning}
           >
-            <Text style={styles.buttonText}>Duraklat</Text>
+            <Text style={styles.buttonText}>Duraklat & Kaydet</Text>
           </TouchableOpacity>
 
           <TouchableOpacity style={styles.button} onPress={resetTimer}>
@@ -383,9 +377,8 @@ const HomeScreen = () => {
         </View>
 
         <View style={{ height: 40 }} />
-        <Text style={{ fontSize: 12, color: 'gray' }}>
-          (Uygulamadan çıktığınızda sayaç otomatik duraklar ve bir dikkat
-          dağılımı sayılır.)
+        <Text style={{ fontSize: 12, color: 'gray', textAlign: 'center' }}>
+          (Uygulamadan çıktığınızda sayaç duraklar ve kaldığınız yerde bekler. Kaydetmek için 'Duraklat & Kaydet'e basın.)
         </Text>
       </View>
     </TouchableWithoutFeedback>
