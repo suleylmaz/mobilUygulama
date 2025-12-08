@@ -1,7 +1,21 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, FlatList, TouchableOpacity, Alert } from 'react-native';
+import { View, Text, StyleSheet, FlatList, TouchableOpacity, Alert, ScrollView } from 'react-native';
 import { useIsFocused } from '@react-navigation/native';
+import { Ionicons } from '@expo/vector-icons'; 
 import { getAllSessions, deleteSession, deleteAllSessions } from '../storage/storage';
+
+const formatTimeHHMMSS = (secs) => {
+    const totalSeconds = Math.max(0, secs);
+    const hours = Math.floor(totalSeconds / 3600);
+    const minutes = Math.floor((totalSeconds % 3600) / 60);
+    const seconds = totalSeconds % 60;
+
+    const h = hours.toString().padStart(2, '0');
+    const m = minutes.toString().padStart(2, '0');
+    const s = seconds.toString().padStart(2, '0');
+
+    return `${h}:${m}:${s}`;
+}
 
 const formatDurationDetail = (secs) => {
     const totalSeconds = Math.max(0, secs);
@@ -24,9 +38,21 @@ const formatDurationDetail = (secs) => {
     return parts.join(' ');
 }
 
+const isToday = (someDate) => {
+  const today = new Date();
+  const date = new Date(someDate);
+  return date.getDate() === today.getDate() &&
+    date.getMonth() === today.getMonth() &&
+    date.getFullYear() === today.getFullYear();
+}
 
 const ReportsScreen = () => {
     const [sessions, setSessions] = useState([]);
+    const [stats, setStats] = useState({
+        todayFocusSec: 0,
+        allTimeFocusSec: 0,
+        totalDistractions: 0,
+    });
     const isFocused = useIsFocused();
 
     useEffect(() => {
@@ -35,10 +61,36 @@ const ReportsScreen = () => {
         }
     }, [isFocused]);
 
+    const calculateStats = (allSessions) => {
+        let todayFocusSec = 0;
+        let allTimeFocusSec = 0;
+        let totalDistractions = 0;
+
+        allSessions.forEach(session => {
+            const duration = session.durationSec;
+            const distractions = session.distractions;
+
+            allTimeFocusSec += duration;
+            
+            if (isToday(session.date)) {
+                todayFocusSec += duration;
+            }
+
+            totalDistractions += distractions;
+        });
+
+        setStats({
+            todayFocusSec,
+            allTimeFocusSec,
+            totalDistractions,
+        });
+    };
+
     const loadSessions = async () => {
         const data = await getAllSessions();
         data.sort((a, b) => new Date(b.date) - new Date(a.date));
         setSessions(data);
+        calculateStats(data);
     };
 
     const handleDeleteSingle = (id) => {
@@ -51,7 +103,7 @@ const ReportsScreen = () => {
             text: 'Sil',
             style: 'destructive',
             onPress: async () => {
-              const success = await deleteSession(id); // Tekil silme
+              const success = await deleteSession(id); 
               if (success) {
                   loadSessions();
               } else {
@@ -78,7 +130,7 @@ const ReportsScreen = () => {
                     text: 'Hepsini Sil',
                     style: 'destructive',
                     onPress: async () => {
-                        const success = await deleteAllSessions(); 
+                        const success = await deleteAllSessions();
                         if (success) {
                             loadSessions();
                             Alert.alert('Başarılı', 'Tüm seans geçmişi başarıyla silindi.');
@@ -90,62 +142,122 @@ const ReportsScreen = () => {
             ]
         );
     };
+    
+    const StatCard = ({ title, value, isTime = false, iconName, color }) => (
+        <View style={[styles.statCard, { borderColor: color }]}>
+            <Ionicons name={iconName} size={28} color={color} style={styles.statIcon} />
+            <View style={styles.statContent}>
+                <Text style={styles.statTitle}>{title}</Text>
+                {isTime ? (
+                    <View>
+                        <Text style={[styles.statValue, { color }]}>{formatTimeHHMMSS(value)}</Text>
+                        <Text style={styles.statUnit}>({formatDurationDetail(value)})</Text>
+                    </View>
+                ) : (
+                    <Text style={[styles.statValue, { color }]}>{value}</Text>
+                )}
+            </View>
+        </View>
+    );
 
     const renderItem = ({ item }) => {
         const durationText = formatDurationDetail(item.durationSec);
         const date = new Date(item.date).toLocaleDateString('tr-TR');
         const time = new Date(item.date).toLocaleTimeString('tr-TR', {hour: '2-digit', minute:'2-digit'});
-        const status = item.completed ? ' Tamamlandı' : 'Durduruldu';
+        const status = item.completed ? 'Tamamlandı' : 'Durduruldu';
 
         return (
             <View style={styles.card}>
-                <View style={styles.row}>
+                <View style={styles.cardHeader}>
                     <Text style={styles.cardTitle}>{item.category}</Text>
                     <Text style={[styles.cardStatus, item.completed ? styles.completed : styles.stopped]}>{status}</Text>
                 </View>
-                <Text style={styles.cardDetail}>Süre: {durationText}</Text>
-                <Text style={styles.cardDetail}>Dikkat Dağılımı: {item.distractions}</Text>
+
+                <View style={styles.cardBody}>
+                    <View style={styles.detailRow}>
+                        <Ionicons name="timer-outline" size={16} color="#38A169" />
+                        <Text style={styles.detailText}>{durationText}</Text>
+                    </View>
+
+                    <View style={styles.detailRow}>
+                        <Ionicons name="alert-circle-outline" size={16} color="#E53E3E" />
+                        <Text style={styles.detailText}>Dikkat Dağılımı: {item.distractions}</Text>
+                    </View>
+                    
+                    <View style={styles.detailRow}>
+                        <Ionicons name="calendar-outline" size={16} color="#6B7280" />
+                        <Text style={styles.detailText}>{date} {time}</Text>
+                    </View>
+                </View>
                 
                 <View style={styles.cardFooter}>
-                  <Text style={styles.cardDate}>{date} {time}</Text>
                   
-                
+                  <View /> 
+                  
                   <TouchableOpacity 
                     style={styles.deleteSingleBtn} 
                     onPress={() => handleDeleteSingle(item.id)}
                   >
-                    <Text style={styles.deleteSingleText}>Sil</Text>
+                    <Ionicons name="trash-outline" size={18} color="white" />
                   </TouchableOpacity>
                 </View>
-
             </View>
         );
     };
 
     return (
-        <View style={styles.container}>
-            <Text style={styles.title}>Raporlar (Seans Geçmişi)</Text>
-            
-            {sessions.length > 0 && (
-                <TouchableOpacity 
-                  style={styles.deleteAllBtn} 
-                  onPress={handleDeleteAll}
-                >
-                    <Text style={styles.deleteAllText}>Tüm Seansları Sil</Text>
-                </TouchableOpacity>
-            )}
+        <ScrollView style={{ flex: 1, backgroundColor: '#f7f7f7' }}>
+            <View style={styles.container}>
+                <Text style={styles.title}>Raporlar (Dashboard)</Text>
 
-            {sessions.length === 0 ? (
-                <Text style={styles.emptyText}>Henüz kaydedilmiş bir seansınız yok.</Text>
-            ) : (
-                <FlatList
-                    data={sessions}
-                    keyExtractor={(item) => item.id}
-                    renderItem={renderItem}
-                    contentContainerStyle={styles.listContainer}
-                />
-            )}
-        </View>
+                <View style={styles.statsContainer}>
+                    <StatCard 
+                        title="Bugün Odaklanma Süresi" 
+                        value={stats.todayFocusSec} 
+                        isTime={true}
+                        iconName="time-outline"
+                        color="#38A169" 
+                    />
+                    <StatCard 
+                        title="Tüm Zamanların Süresi" 
+                        value={stats.allTimeFocusSec} 
+                        isTime={true} 
+                        iconName="analytics-outline"
+                        color="#3182CE"
+                    />
+                    <StatCard 
+                        title="Toplam Dikkat Dağınıklığı" 
+                        value={stats.totalDistractions} 
+                        isTime={false}
+                        iconName="alert-circle-outline"
+                        color="#E53E3E" 
+                    />
+                </View>
+                
+                <Text style={styles.subTitle}>Seans Geçmişi</Text>
+
+                {sessions.length > 0 && (
+                    <TouchableOpacity 
+                      style={styles.deleteAllBtn} 
+                      onPress={handleDeleteAll}
+                    >
+                        <Text style={styles.deleteAllText}>Tüm Seansları Sil</Text>
+                    </TouchableOpacity>
+                )}
+
+                {sessions.length === 0 ? (
+                    <Text style={styles.emptyText}>Henüz kaydedilmiş bir seansınız yok.</Text>
+                ) : (
+                    <FlatList
+                        data={sessions}
+                        keyExtractor={(item) => item.id}
+                        renderItem={renderItem}
+                        scrollEnabled={false} 
+                        contentContainerStyle={styles.listContainer}
+                    />
+                )}
+            </View>
+        </ScrollView>
     );
 };
 
@@ -156,10 +268,55 @@ const styles = StyleSheet.create({
         backgroundColor: '#f7f7f7',
     },
     title: {
-        fontSize: 22,
-        fontWeight: '700',
+        fontSize: 24,
+        fontWeight: '900',
         marginBottom: 15,
         alignSelf: 'center',
+        color: '#333',
+    },
+    subTitle: {
+        fontSize: 18,
+        fontWeight: '700',
+        marginTop: 20,
+        marginBottom: 10,
+        color: '#555',
+    },
+    statsContainer: {
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        justifyContent: 'space-between',
+        marginTop: 10,
+    },
+    statCard: {
+        backgroundColor: 'white',
+        padding: 15,
+        borderRadius: 10,
+        marginBottom: 10,
+        width: '100%', 
+        elevation: 3,
+        flexDirection: 'row',
+        alignItems: 'center',
+        borderLeftWidth: 5,
+    },
+    statIcon: {
+        marginRight: 10,
+        alignSelf: 'center',
+    },
+    statContent: {
+        flex: 1,
+    },
+    statValue: {
+        fontSize: 18,
+        fontWeight: '900',
+    },
+    statTitle: {
+        fontSize: 12,
+        fontWeight: '600',
+        color: '#666',
+    },
+    statUnit: {
+        fontSize: 10,
+        color: '#999',
     },
     deleteAllBtn: {
         backgroundColor: '#C53030', 
@@ -183,38 +340,43 @@ const styles = StyleSheet.create({
         marginBottom: 10,
         elevation: 2,
     },
-    row: {
+    cardHeader: {
         flexDirection: 'row',
         justifyContent: 'space-between',
         alignItems: 'center',
-        marginBottom: 5,
+        paddingBottom: 8,
+        borderBottomWidth: 1,
+        borderBottomColor: '#eee',
     },
     cardTitle: {
         fontSize: 18,
         fontWeight: '700',
         color: '#333',
     },
-    cardDetail: {
-        fontSize: 14,
-        color: '#555',
-        marginBottom: 2,
-    },
-    cardFooter: {
-      flexDirection: 'row',
-      justifyContent: 'space-between',
-      alignItems: 'center',
-      marginTop: 8,
-    },
-    cardDate: {
-        fontSize: 12,
-        color: '#999',
-    },
     cardStatus: {
-        fontSize: 14,
+        fontSize: 12,
         fontWeight: '600',
         paddingHorizontal: 8,
         paddingVertical: 3,
         borderRadius: 4,
+    },
+    cardBody: {
+        paddingTop: 8,
+    },
+    detailRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        marginBottom: 4,
+    },
+    detailText: {
+        fontSize: 14,
+        color: '#555',
+        marginLeft: 8,
+    },
+    cardFooter: {
+      flexDirection: 'row',
+      justifyContent: 'flex-end',
+      marginTop: 10,
     },
     completed: {
         backgroundColor: '#D1FAE5',
@@ -226,14 +388,8 @@ const styles = StyleSheet.create({
     },
     deleteSingleBtn: {
       backgroundColor: '#EF4444',
-      paddingHorizontal: 10,
-      paddingVertical: 5,
+      padding: 8,
       borderRadius: 4,
-    },
-    deleteSingleText: {
-      color: 'white',
-      fontWeight: '600',
-      fontSize: 14,
     },
     emptyText: {
         textAlign: 'center',
