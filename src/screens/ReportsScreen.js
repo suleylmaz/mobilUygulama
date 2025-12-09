@@ -1,8 +1,11 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, FlatList, TouchableOpacity, Alert, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, FlatList, TouchableOpacity, Alert, ScrollView, Dimensions } from 'react-native';
 import { useIsFocused } from '@react-navigation/native';
-import { Ionicons } from '@expo/vector-icons'; 
+import { Ionicons } from '@expo/vector-icons';
 import { getAllSessions, deleteSession, deleteAllSessions } from '../storage/storage';
+import { BarChart, PieChart } from 'react-native-chart-kit';
+
+const screenWidth = Dimensions.get('window').width;
 
 const formatTimeHHMMSS = (secs) => {
     const totalSeconds = Math.max(0, secs);
@@ -53,6 +56,12 @@ const ReportsScreen = () => {
         allTimeFocusSec: 0,
         totalDistractions: 0,
     });
+    const [chartData, setChartData] = useState({
+        barChart: { labels: [], datasets: [{ data: [] }] },
+        pieChart: [],
+        pieTotal: 0,
+    });
+
     const isFocused = useIsFocused();
 
     useEffect(() => {
@@ -61,28 +70,78 @@ const ReportsScreen = () => {
         }
     }, [isFocused]);
 
-    const calculateStats = (allSessions) => {
+    const calculateStatsAndCharts = (allSessions) => {
         let todayFocusSec = 0;
         let allTimeFocusSec = 0;
         let totalDistractions = 0;
 
+        const msPerDay = 24 * 60 * 60 * 1000;
+        const now = Date.now();
+        const sevenDaysAgo = now - 7 * msPerDay;
+
+        const dailyFocusMap = new Map(); 
+        const categoryFocusMap = new Map();
+        let pieTotal = 0;
+
+        for (let i = 0; i < 7; i++) {
+            const date = new Date(now - i * msPerDay);
+            const label = date.toLocaleDateString('tr-TR', { weekday: 'short' });
+            dailyFocusMap.set(label, 0);
+        }
+
         allSessions.forEach(session => {
             const duration = session.durationSec;
             const distractions = session.distractions;
+            const sessionTime = new Date(session.date).getTime();
 
             allTimeFocusSec += duration;
-            
+            totalDistractions += distractions;
+            pieTotal += duration;
+
             if (isToday(session.date)) {
                 todayFocusSec += duration;
             }
 
-            totalDistractions += distractions;
+            if (sessionTime > sevenDaysAgo) {
+                const date = new Date(session.date);
+                const label = date.toLocaleDateString('tr-TR', { weekday: 'short' });
+                dailyFocusMap.set(label, dailyFocusMap.get(label) + duration);
+            }
+
+            const categoryName = session.category;
+            categoryFocusMap.set(categoryName, (categoryFocusMap.get(categoryName) || 0) + duration);
+        });
+        
+        const orderedWeekDays = ["Pzt", "Sal", "Çar", "Per", "Cum", "Cmt", "Paz"];
+
+        const barLabels = orderedWeekDays;
+        const barData = orderedWeekDays.map(day => dailyFocusMap.get(day) || 0);
+
+        const colorPalette = ['#38A169', '#3182CE', '#E53E3E', '#F6AD55', '#4C51BF', '#333333'];
+        let colorIndex = 0;
+
+        const pieData = Array.from(categoryFocusMap).map(([name, value]) => {
+            const percentage = Math.round((value / pieTotal) * 100);
+            const formattedTime = formatDurationDetail(value); 
+
+            const data = {
+                //name: `${formattedTime}`,
+                name:`${name}`,
+                population: value,
+                color: colorPalette[colorIndex % colorPalette.length],
+                legendFontColor: '#7F7F7F',
+                legendFontSize: 11,
+            };
+            colorIndex++;
+            return data;
         });
 
-        setStats({
-            todayFocusSec,
-            allTimeFocusSec,
-            totalDistractions,
+
+        setStats({ todayFocusSec, allTimeFocusSec, totalDistractions });
+        setChartData({
+            barChart: { labels: barLabels, datasets: [{ data: barData }] },
+            pieChart: pieData,
+            pieTotal: pieTotal,
         });
     };
 
@@ -90,7 +149,7 @@ const ReportsScreen = () => {
         const data = await getAllSessions();
         data.sort((a, b) => new Date(b.date) - new Date(a.date));
         setSessions(data);
-        calculateStats(data);
+        calculateStatsAndCharts(data);
     };
 
     const handleDeleteSingle = (id) => {
@@ -104,11 +163,8 @@ const ReportsScreen = () => {
             style: 'destructive',
             onPress: async () => {
               const success = await deleteSession(id); 
-              if (success) {
-                  loadSessions();
-              } else {
-                  Alert.alert('Hata', 'Seans silinirken bir sorun oluştu.');
-              }
+              if (success) { loadSessions(); } 
+              else { Alert.alert('Hata', 'Seans silinirken bir sorun oluştu.'); }
             },
           },
         ]
@@ -142,7 +198,7 @@ const ReportsScreen = () => {
             ]
         );
     };
-    
+
     const StatCard = ({ title, value, isTime = false, iconName, color }) => (
         <View style={[styles.statCard, { borderColor: color }]}>
             <Ionicons name={iconName} size={28} color={color} style={styles.statIcon} />
@@ -191,7 +247,6 @@ const ReportsScreen = () => {
                 </View>
                 
                 <View style={styles.cardFooter}>
-                  
                   <View /> 
                   
                   <TouchableOpacity 
@@ -203,6 +258,17 @@ const ReportsScreen = () => {
                 </View>
             </View>
         );
+    };
+
+    const chartConfig = {
+        backgroundGradientFrom: '#f7f7f7',
+        backgroundGradientTo: '#f7f7f7',
+        color: (opacity = 1) => `rgba(56, 161, 105, ${opacity})`, 
+        strokeWidth: 2, 
+        barPercentage: 0.5,
+        useShadowColorFromDataset: false,
+        labelColor: (opacity = 1) => `rgba(0, 0, 0, ${opacity})`,
+        decimalPlaces: 0, 
     };
 
     return (
@@ -230,9 +296,40 @@ const ReportsScreen = () => {
                         value={stats.totalDistractions} 
                         isTime={false}
                         iconName="alert-circle-outline"
-                        color="#E53E3E" 
+                        color="#E53E3E"
                     />
                 </View>
+
+                <Text style={styles.chartTitle}>Son 7 Günlük Odaklanma (Saniye)</Text>
+                {chartData.barChart.datasets[0].data.length > 0 && (
+                    <BarChart
+                        data={chartData.barChart}
+                        width={screenWidth - 32} 
+                        height={220}
+                        yAxisLabel=""
+                        chartConfig={chartConfig}
+                        verticalLabelRotation={30}
+                        style={styles.chart}
+                    />
+                )}
+
+                {chartData.pieTotal > 0 && (
+                    <View>
+                        <Text style={styles.chartTitle}>Kategoriye Göre Süre Dağılımı</Text>
+                        <PieChart
+                            data={chartData.pieChart}
+                            width={screenWidth - 32}
+                            height={220}
+                            chartConfig={chartConfig}
+                            accessor={"population"} 
+                            backgroundColor={"transparent"}
+                            paddingLeft={"15"}
+                            center={[10, 0]}
+                            //absolute
+                            style={styles.chart}
+                        />
+                    </View>
+                )}
                 
                 <Text style={styles.subTitle}>Seans Geçmişi</Text>
 
@@ -317,6 +414,22 @@ const styles = StyleSheet.create({
     statUnit: {
         fontSize: 10,
         color: '#999',
+    },
+    chartTitle: {
+        fontSize: 16,
+        fontWeight: '700',
+        marginTop: 20,
+        marginBottom: 5,
+        color: '#333',
+        textAlign: 'center',
+    },
+    chart: {
+        marginVertical: 8,
+        borderRadius: 10,
+        paddingRight: 0,
+        backgroundColor: 'white',
+        elevation: 3,
+        paddingBottom: 0,
     },
     deleteAllBtn: {
         backgroundColor: '#C53030', 
