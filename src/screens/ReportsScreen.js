@@ -121,12 +121,8 @@ const ReportsScreen = () => {
         let colorIndex = 0;
 
         const pieData = Array.from(categoryFocusMap).map(([name, value]) => {
-            const percentage = Math.round((value / pieTotal) * 100);
-            const formattedTime = formatDurationDetail(value); 
-
             const data = {
-                //name: `${formattedTime}`,
-                name:`${name}`,
+                name: name,
                 population: value,
                 color: colorPalette[colorIndex % colorPalette.length],
                 legendFontColor: '#7F7F7F',
@@ -135,7 +131,6 @@ const ReportsScreen = () => {
             colorIndex++;
             return data;
         });
-
 
         setStats({ todayFocusSec, allTimeFocusSec, totalDistractions });
         setChartData({
@@ -324,10 +319,29 @@ const ReportsScreen = () => {
                             accessor={"population"} 
                             backgroundColor={"transparent"}
                             paddingLeft={"15"}
-                            center={[10, 0]}
-                            //absolute
+                            center={[72, 0]}
+                            hasLegend={false}
                             style={styles.chart}
                         />
+                        
+                        <View style={styles.customLegend}>
+                            {chartData.pieChart.map((item, index) => {
+                                const percentage = Math.round((item.population / chartData.pieTotal) * 100);
+                                const formattedTime = formatDurationDetail(item.population);
+                                
+                                return (
+                                    <View key={index} style={styles.legendItem}>
+                                        <View style={[styles.legendColor, { backgroundColor: item.color }]} />
+                                        <View style={styles.legendTextContainer}>
+                                            <Text style={styles.legendTitle}>
+                                                {item.name} ({percentage}%)
+                                            </Text>
+                                            <Text style={styles.legendDuration}>{formattedTime}</Text>
+                                        </View>
+                                    </View>
+                                );
+                            })}
+                        </View>
                     </View>
                 )}
                 
@@ -430,6 +444,37 @@ const styles = StyleSheet.create({
         backgroundColor: 'white',
         elevation: 3,
         paddingBottom: 0,
+    },
+    customLegend: {
+        backgroundColor: 'white',
+        padding: 15,
+        borderRadius: 10,
+        marginTop: 10,
+        elevation: 2,
+    },
+    legendItem: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        marginBottom: 12,
+    },
+    legendColor: {
+        width: 16,
+        height: 16,
+        borderRadius: 8,
+        marginRight: 10,
+    },
+    legendTextContainer: {
+        flex: 1,
+    },
+    legendTitle: {
+        fontSize: 14,
+        fontWeight: '600',
+        color: '#333',
+        marginBottom: 2,
+    },
+    legendDuration: {
+        fontSize: 12,
+        color: '#666',
     },
     deleteAllBtn: {
         backgroundColor: '#C53030', 
