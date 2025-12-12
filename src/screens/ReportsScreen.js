@@ -62,6 +62,13 @@ const ReportsScreen = () => {
         pieTotal: 0,
     });
 
+    const [tooltipInfo, setTooltipInfo] = useState({ 
+        visible: false, 
+        index: -1,
+        value: 0,
+        label: ''
+    });
+
     const isFocused = useIsFocused();
 
     useEffect(() => {
@@ -194,6 +201,22 @@ const ReportsScreen = () => {
         );
     };
 
+    const handleBarPress = (index) => {
+        const value = chartData.barChart.datasets[0].data[index];
+        const label = chartData.barChart.labels[index];
+        
+        setTooltipInfo({
+            visible: true,
+            index: index,
+            value: value,
+            label: label
+        });
+
+        setTimeout(() => {
+            setTooltipInfo(prev => ({ ...prev, visible: false }));
+        }, 3000);
+    };
+
     const StatCard = ({ title, value, isTime = false, iconName, color }) => (
         <View style={[styles.statCard, { borderColor: color }]}>
             <Ionicons name={iconName} size={28} color={color} style={styles.statIcon} />
@@ -243,7 +266,6 @@ const ReportsScreen = () => {
                 
                 <View style={styles.cardFooter}>
                   <View /> 
-                  
                   <TouchableOpacity 
                     style={styles.deleteSingleBtn} 
                     onPress={() => handleDeleteSingle(item.id)}
@@ -265,6 +287,12 @@ const ReportsScreen = () => {
         labelColor: (opacity = 1) => `rgba(0, 0, 0, ${opacity})`,
         decimalPlaces: 0, 
     };
+
+    const chartWidth = screenWidth - 32;
+    const paddingLeft = 10; 
+    const paddingRight = 45; 
+    const availableWidth = chartWidth - paddingLeft - paddingRight;
+    const barWidth = availableWidth / 7;
 
     return (
         <ScrollView style={{ flex: 1, backgroundColor: '#f7f7f7' }}>
@@ -297,15 +325,50 @@ const ReportsScreen = () => {
 
                 <Text style={styles.chartTitle}>Son 7 Günlük Odaklanma (Saniye)</Text>
                 {chartData.barChart.datasets[0].data.length > 0 && (
-                    <BarChart
-                        data={chartData.barChart}
-                        width={screenWidth - 32} 
-                        height={220}
-                        yAxisLabel=""
-                        chartConfig={chartConfig}
-                        verticalLabelRotation={30}
-                        style={styles.chart}
-                    />
+                    <View style={styles.chartContainer}>
+                        <BarChart
+                            data={chartData.barChart}
+                            width={chartWidth} 
+                            height={220}
+                            yAxisLabel=""
+                            chartConfig={chartConfig}
+                            verticalLabelRotation={0} 
+                            style={styles.chart}
+                            showValuesOnTopOfBars={false} 
+                            withInnerLines={true}
+                        />
+                        
+                        <View style={[
+                            styles.touchableLayer, 
+                            { paddingLeft: paddingLeft, paddingRight: paddingRight }
+                        ]}>
+                            {chartData.barChart.labels.map((label, index) => (
+                                <TouchableOpacity
+                                    key={index}
+                                    style={styles.barTouchArea}
+                                    onPress={() => handleBarPress(index)}
+                                    activeOpacity={0.6}
+                                />
+                            ))}
+                        </View>
+
+                        {tooltipInfo.visible && (
+                            <View 
+                                style={[
+                                    styles.tooltip, 
+                                    { 
+                                        left: paddingLeft + (tooltipInfo.index * barWidth) + (barWidth / 2) - 60, 
+                                        top: 10
+                                    }
+                                ]}
+                            >
+                                <Text style={styles.tooltipDay}>{tooltipInfo.label}</Text>
+                                <Text style={styles.tooltipTime}>
+                                    {formatDurationDetail(tooltipInfo.value)}
+                                </Text>
+                            </View>
+                        )}
+                    </View>
                 )}
 
                 {chartData.pieTotal > 0 && (
@@ -437,6 +500,10 @@ const styles = StyleSheet.create({
         color: '#333',
         textAlign: 'center',
     },
+    chartContainer: {
+        position: 'relative',
+        height: 240,
+    },
     chart: {
         marginVertical: 8,
         borderRadius: 10,
@@ -444,6 +511,45 @@ const styles = StyleSheet.create({
         backgroundColor: 'white',
         elevation: 3,
         paddingBottom: 0,
+    },
+    touchableLayer: {
+        position: 'absolute',
+        top: 0,
+        bottom: 40,
+        left: 0,
+        right: 0,
+        flexDirection: 'row',
+        alignItems: 'stretch',
+    },
+    barTouchArea: {
+        flex: 1,
+        backgroundColor: 'transparent', 
+    },
+    tooltip: {
+        position: 'absolute',
+        backgroundColor: '#38A169',
+        paddingVertical: 8,
+        paddingHorizontal: 12,
+        borderRadius: 8,
+        elevation: 8,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.25,
+        shadowRadius: 3.84,
+        minWidth: 120,
+        alignItems: 'center',
+        zIndex: 1000,
+    },
+    tooltipDay: {
+        color: 'white',
+        fontSize: 12,
+        fontWeight: '600',
+        marginBottom: 2,
+    },
+    tooltipTime: {
+        color: 'white',
+        fontSize: 14,
+        fontWeight: '700',
     },
     customLegend: {
         backgroundColor: 'white',
