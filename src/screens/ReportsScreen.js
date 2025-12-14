@@ -289,10 +289,16 @@ const ReportsScreen = () => {
     };
 
     const chartWidth = screenWidth - 32;
-    const paddingLeft = 10; 
-    const paddingRight = 45; 
-    const availableWidth = chartWidth - paddingLeft - paddingRight;
-    const barWidth = availableWidth / 7;
+    const yAxisWidth = 50; // Y ekseni için alan
+    const chartEndPadding = 16; // Sağ taraf padding
+    const actualChartWidth = chartWidth - yAxisWidth - chartEndPadding;
+    const barSpacing = actualChartWidth / 7; // Her çubuk için alan
+    
+    const getTooltipPosition = (index) => {
+        // Her çubuk için pozisyon hesaplama
+        const barCenter = yAxisWidth + (index * barSpacing) + (barSpacing / 2);
+        return barCenter - 60; // 60 tooltip genişliğinin yarısı
+    };
 
     return (
         <ScrollView style={{ flex: 1, backgroundColor: '#f7f7f7' }}>
@@ -338,10 +344,7 @@ const ReportsScreen = () => {
                             withInnerLines={true}
                         />
                         
-                        <View style={[
-                            styles.touchableLayer, 
-                            { paddingLeft: paddingLeft, paddingRight: paddingRight }
-                        ]}>
+                        <View style={styles.touchableLayer}>
                             {chartData.barChart.labels.map((label, index) => (
                                 <TouchableOpacity
                                     key={index}
@@ -357,7 +360,7 @@ const ReportsScreen = () => {
                                 style={[
                                     styles.tooltip, 
                                     { 
-                                        left: paddingLeft + (tooltipInfo.index * barWidth) + (barWidth / 2) - 60, 
+                                        left: getTooltipPosition(tooltipInfo.index), 
                                         top: 10
                                     }
                                 ]}

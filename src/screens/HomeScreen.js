@@ -84,9 +84,12 @@ const HomeScreen = () => {
   };
 
   useEffect(() => {
+    loadDuration();
+  }, []);
+
+  useEffect(() => {
     if (isFocused) {
       loadCategories();
-      loadDuration();
     }
   }, [isFocused]);
 
