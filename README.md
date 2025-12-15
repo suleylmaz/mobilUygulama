@@ -59,7 +59,7 @@ npm install
 npm start
 ```
 
-##Proje Yapısı
+###Proje Yapısı
 
 ```
 mobilUygulama/
