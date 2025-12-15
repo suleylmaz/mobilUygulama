@@ -26,7 +26,7 @@ Uygulamanın en ayırt edici özelliği, kullanıcı uygulamadan çıktığında
 - Kategori bazlı filtreleme
 - Seans detayları ve silme özellikleri
 
-## Teknolojiler
+### Teknolojiler
 
 - **React Native** - Mobil uygulama framework'ü
 - **React Navigation** - Tab ve Stack navigasyon
@@ -34,7 +34,7 @@ Uygulamanın en ayırt edici özelliği, kullanıcı uygulamadan çıktığında
 - **Expo Vector Icons** - İkon kütüphanesi
 - **React Native Modal Selector** - Kategori seçici
 
-## Kurulum
+### Kurulum
 
 ### Gereksinimler
 - Node.js
@@ -73,7 +73,7 @@ mobilUygulama/
 │       └── storage.js             # AsyncStorage fonksiyonları
 ```
 
-##Kullanım
+###Kullanım
 
 ### Zamanlayıcı Başlatma
 1. Ana ekranda saat ve dakika değerlerini girin
