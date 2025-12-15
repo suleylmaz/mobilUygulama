@@ -55,6 +55,7 @@ npm install
 ```
 
 3. Uygulamayı çalıştırın:
+```bash
 npm start
 ```
 
