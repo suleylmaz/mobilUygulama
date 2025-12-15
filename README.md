@@ -59,7 +59,7 @@ npm install
 npm start
 ```
 
-###Proje Yapısı
+### Proje Yapısı
 
 ```
 mobilUygulama/
@@ -73,7 +73,7 @@ mobilUygulama/
 │       └── storage.js             # AsyncStorage fonksiyonları
 ```
 
-###Kullanım
+### Kullanım
 
 ### Zamanlayıcı Başlatma
 1. Ana ekranda saat ve dakika değerlerini girin
